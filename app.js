@@ -4,9 +4,11 @@ const express = require('express');
 const ejs = require('ejs');
 const bodyParser = require('body-parser');
 const mongoose = require('mongoose');
-const encrypt = require('mongoose-encryption');
+// const encrypt = require('mongoose-encryption');
+const bcrypt = require('bcrypt');
 
 const app = express();
+const saltRounds = 10;
 
 app.set("view engine", "ejs");
 app.use(bodyParser.urlencoded({
@@ -30,8 +32,12 @@ const UsersSchema = new mongoose.Schema({
   }
 });
 
-UsersSchema.plugin(encrypt , {secret:process.env.SECRET , encryptedFields : ["Password"]});
-
+///////////ENCRYPT PART AUTHENTICATION /////////////
+// UsersSchema.plugin(encrypt, {
+//   secret: process.env.SECRET,
+//   encryptedFields: ["Password"]
+// });
+/////////////////////////////////////////////
 
 const Users = mongoose.model("User", UsersSchema);
 
@@ -48,48 +54,55 @@ app.get("/login", function(req, res) {
   res.render("login");
 });
 
+app.get("/logout", function(req, res) {
+  res.redirect("/");
+});
+
+
 
 app.post("/register", function(req, res) {
-  const newUser = new Users({
-    Email: req.body.username,
-    Password: req.body.password
-  });
-  newUser.save(function(err) {
-    if (err) {
-      console.log(err);
-    } else {
-      res.render("secrets");
-    }
+
+  bcrypt.hash(req.body.password, saltRounds, function(err, hash) {
+
+    const newUser = new Users({
+      Email: req.body.username,
+      Password: hash
+    });
+
+    newUser.save(function(err) {
+      if (err) {
+        console.log(err);
+      } else {
+        res.render("secrets");
+      }
+    });
   });
 });
 
 app.post("/login", function(req, res) {
-  const userEmail = req.body.username;
-  const password = req.body.password;
 
   Users.findOne({
-    Email: userEmail
-  }, function(err, founduseremail) {
-    if (err) {
-      console.log(err);
-    } else {
-      if (founduseremail) {
-        if (founduseremail.Password === password) {
-          res.render("secrets");
+      Email: req.body.username
+    }, function(err, founduseremail) {
+      if (err) {
+        console.log(err);
+      } else {
+        if (founduseremail) {
+          // if (founduseremail.Password === password) {
+          bcrypt.compare(req.body.password, founduseremail.Password, function(err, result) {
+            if (result === true) {
+              res.render("secrets");
         } else {
           res.send("<h1> The Password You Entered Is Incorrect");
-        }
+        };
+      });
       } else {
         res.send("<h1> The Username You Entered Is Wrong");
-      }
-    }
+      };
+    };
   });
+
 });
-
-
-
-
-
 
 
 app.listen(3000, function() {
